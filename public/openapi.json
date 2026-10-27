@@ -1,0 +1,239 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Mizaj (مزاج) — Customer Mood Intelligence API",
+    "version": "1.0.0",
+    "description": "Estimated customer mood, reasons, confidence and suggested greeting/tone/next action for Omantel call centre and outlet agents. Every mood is an estimate (isEstimate: true), never a fact. This build serves fictional demo data (meta.dataMode = \"demo\"); every customer data source is simulated. No login by design — deploy on the agent network or behind your gateway."
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "tags": [
+    { "name": "Lookup", "description": "Find customers and get mood briefs" },
+    { "name": "Customer", "description": "Profile, mood, timeline, feedback and follow-ups" },
+    { "name": "Calls", "description": "CTI screen-pop channel" },
+    { "name": "Team", "description": "Dashboard and integration status" },
+    { "name": "Demo", "description": "Demo-only helpers" }
+  ],
+  "paths": {
+    "/lookup": {
+      "get": {
+        "tags": ["Lookup"], "summary": "Mood brief by phone number",
+        "parameters": [{ "name": "phone", "in": "query", "required": true, "schema": { "type": "string", "example": "90001001" }, "description": "Omani number in any common format" }],
+        "responses": { "200": { "description": "Brief (matched or not)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Brief" } } } }, "400": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/customers": {
+      "get": {
+        "tags": ["Lookup"], "summary": "Search customers",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Full/partial phone, name or account number" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 20, "default": 8 } }
+        ],
+        "responses": { "200": { "description": "Search results", "content": { "application/json": { "schema": { "type": "object", "properties": { "meta": { "$ref": "#/components/schemas/Meta" }, "query": { "type": "string" }, "results": { "type": "array", "items": { "$ref": "#/components/schemas/CustomerSearchResult" } } } } } } } }
+      }
+    },
+    "/customers/{id}": {
+      "get": {
+        "tags": ["Customer"], "summary": "Unified customer profile",
+        "parameters": [{ "$ref": "#/components/parameters/CustomerId" }],
+        "responses": { "200": { "description": "Profile with services, bills, tickets, calls, messages, feedback, visits, unresolved issues, follow-ups, timeline, mood, suggestions and alerts", "content": { "application/json": { "schema": { "type": "object" } } } }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/customers/{id}/brief": {
+      "get": {
+        "tags": ["Customer"], "summary": "Mood brief by customer id",
+        "parameters": [{ "$ref": "#/components/parameters/CustomerId" }],
+        "responses": { "200": { "description": "Brief", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Brief" } } } }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/customers/{id}/mood": {
+      "get": {
+        "tags": ["Customer"], "summary": "Full mood estimate with insights",
+        "parameters": [{ "$ref": "#/components/parameters/CustomerId" }],
+        "responses": { "200": { "description": "Mood", "content": { "application/json": { "schema": { "type": "object", "properties": { "display": { "$ref": "#/components/schemas/MoodDisplay" }, "estimate": { "$ref": "#/components/schemas/MoodEstimate" }, "agentObservation": { "$ref": "#/components/schemas/AgentObservation" }, "escalation": { "$ref": "#/components/schemas/Escalation" } } } } } }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/customers/{id}/timeline": {
+      "get": {
+        "tags": ["Customer"], "summary": "Interaction timeline (newest first)",
+        "parameters": [
+          { "$ref": "#/components/parameters/CustomerId" },
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["call", "message", "ticket", "feedback", "visit", "followUp", "incident", "mood"] } }
+        ],
+        "responses": { "200": { "description": "Timeline items" } }
+      }
+    },
+    "/customers/{id}/mood-feedback": {
+      "post": {
+        "tags": ["Customer"], "summary": "Confirm or correct the mood",
+        "parameters": [{ "$ref": "#/components/parameters/CustomerId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["verdict"],
+          "properties": {
+            "verdict": { "type": "string", "enum": ["confirmed", "corrected"] },
+            "mood": { "$ref": "#/components/schemas/AgentMood" },
+            "note": { "type": "string", "maxLength": 500 },
+            "agent": { "type": "string", "maxLength": 60 }
+          }
+        } } } },
+        "responses": { "201": { "description": "Saved; returns the correction and the updated mood" }, "400": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/customers/{id}/follow-ups": {
+      "get": { "tags": ["Customer"], "summary": "List follow-ups", "parameters": [{ "$ref": "#/components/parameters/CustomerId" }], "responses": { "200": { "description": "Follow-ups" } } },
+      "post": {
+        "tags": ["Customer"], "summary": "Log a commitment to the customer",
+        "parameters": [{ "$ref": "#/components/parameters/CustomerId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["title", "dueAt"],
+          "properties": { "title": { "type": "string", "maxLength": 140 }, "dueAt": { "type": "string", "format": "date-time" }, "owner": { "type": "string" }, "category": { "type": "string" }, "ticketId": { "type": "string" } }
+        } } } },
+        "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "type": "object", "properties": { "followUp": { "$ref": "#/components/schemas/FollowUp" } } } } } }, "400": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/follow-ups/{id}": {
+      "patch": {
+        "tags": ["Customer"], "summary": "Update a follow-up status",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["open", "done", "cancelled"] } } } } } },
+        "responses": { "200": { "description": "Updated" }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/calls/incoming": {
+      "post": {
+        "tags": ["Calls"], "summary": "Live CTI webhook: a call is ringing",
+        "description": "Pushes the caller's mood brief to agent screens listening on /events and returns it. Requires X-Api-Key when MIZAJ_CTI_KEY is configured.",
+        "parameters": [{ "name": "X-Api-Key", "in": "header", "required": false, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "required": ["phone"],
+          "properties": { "phone": { "type": "string", "example": "+968 9000 1001" }, "callId": { "type": "string" }, "agentId": { "type": "string" }, "queue": { "type": "string" } }
+        } } } },
+        "responses": { "202": { "description": "Accepted", "content": { "application/json": { "schema": { "type": "object", "properties": { "call": { "$ref": "#/components/schemas/CallEvent" }, "brief": { "$ref": "#/components/schemas/Brief" }, "deliveredTo": { "type": "integer" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/events": {
+      "get": {
+        "tags": ["Calls"], "summary": "Server-Sent Events: incoming-call",
+        "parameters": [{ "name": "agentId", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "text/event-stream with `incoming-call` events ({ call, brief })", "content": { "text/event-stream": {} } } }
+      }
+    },
+    "/calls/recent": { "get": { "tags": ["Calls"], "summary": "Last 25 call events", "responses": { "200": { "description": "Calls" } } } },
+    "/dashboard": {
+      "get": {
+        "tags": ["Team"], "summary": "Mood trends, recurring issues and attention lists",
+        "parameters": [{ "name": "days", "in": "query", "schema": { "type": "integer", "enum": [30, 60, 90], "default": 30 } }],
+        "responses": { "200": { "description": "Dashboard" } }
+      }
+    },
+    "/integrations": { "get": { "tags": ["Team"], "summary": "Simulated vs live sources and channels", "responses": { "200": { "description": "Integration status" } } } },
+    "/meta": { "get": { "tags": ["Team"], "summary": "Engine configuration and categories", "responses": { "200": { "description": "Meta" } } } },
+    "/health": { "get": { "tags": ["Team"], "summary": "Health check", "responses": { "200": { "description": "OK" } } } },
+    "/demo/simulate-call": {
+      "post": {
+        "tags": ["Demo"], "summary": "Send a simulated call (demo only)",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "phone": { "type": "string" } } } } } },
+        "responses": { "202": { "description": "Accepted" } }
+      }
+    },
+    "/demo/reset": { "post": { "tags": ["Demo"], "summary": "Reset demo data and agent actions", "responses": { "200": { "description": "Reset" } } } }
+  },
+  "components": {
+    "parameters": {
+      "CustomerId": { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "example": "C1001" } }
+    },
+    "responses": {
+      "Error": { "description": "Error", "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string" } } } } } }
+    },
+    "schemas": {
+      "Meta": { "type": "object", "properties": { "dataMode": { "type": "string", "enum": ["demo"] }, "demoNotice": { "type": "string" }, "generatedAt": { "type": "string", "format": "date-time" } } },
+      "Mood": { "type": "string", "enum": ["positive", "neutral", "frustrated", "upset", "unknown"] },
+      "AgentMood": { "type": "string", "enum": ["positive", "neutral", "frustrated", "upset"] },
+      "MoodDisplay": {
+        "type": "object", "description": "What to lead with: an active agent observation, else the estimate.",
+        "properties": { "mood": { "$ref": "#/components/schemas/Mood" }, "label": { "type": "string" }, "source": { "type": "string", "enum": ["estimate", "agent"] }, "sourceLabel": { "type": "string", "enum": ["Estimated", "Agent-reported", "Agent-confirmed"] } }
+      },
+      "Reason": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" }, "direction": { "type": "string", "enum": ["negative", "positive"] }, "weight": { "type": "number" },
+          "at": { "type": "string", "format": "date-time" }, "ongoing": { "type": "boolean" }, "category": { "type": "string" },
+          "source": { "type": "object", "properties": { "type": { "type": "string" }, "id": { "type": "string" } } },
+          "quote": { "type": "string" }, "cues": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "MoodEstimate": {
+        "type": "object",
+        "properties": {
+          "isEstimate": { "type": "boolean", "enum": [true] },
+          "mood": { "$ref": "#/components/schemas/Mood" }, "label": { "type": "string" }, "score": { "type": "integer", "nullable": true },
+          "confidence": { "type": "object", "properties": { "level": { "type": "string", "enum": ["high", "medium", "low", "none"] }, "label": { "type": "string" }, "value": { "type": "number" } } },
+          "mixedSignals": { "type": "boolean" }, "latestPointsOtherWay": { "type": "boolean" },
+          "unknownReason": { "type": "string", "nullable": true },
+          "reasons": { "type": "array", "items": { "$ref": "#/components/schemas/Reason" } },
+          "counterEvidence": { "type": "array", "items": { "$ref": "#/components/schemas/Reason" } },
+          "signalCount": { "type": "integer" }, "evidenceWindowDays": { "type": "integer" },
+          "lastEvidenceAt": { "type": "string", "format": "date-time", "nullable": true }, "computedAt": { "type": "string", "format": "date-time" },
+          "method": { "type": "string" }, "disclaimer": { "type": "string" }
+        }
+      },
+      "AgentObservation": {
+        "type": "object", "nullable": true,
+        "properties": { "mood": { "$ref": "#/components/schemas/AgentMood" }, "label": { "type": "string" }, "verdict": { "type": "string", "enum": ["confirmed", "corrected"] }, "agent": { "type": "string" }, "note": { "type": "string" }, "at": { "type": "string", "format": "date-time" }, "expiresAt": { "type": "string", "format": "date-time" } }
+      },
+      "Escalation": {
+        "type": "object",
+        "properties": {
+          "needed": { "type": "boolean" }, "level": { "type": "string", "enum": ["urgent", "recommended", "none"] }, "route": { "type": "string", "nullable": true },
+          "reasons": { "type": "array", "items": { "type": "object", "properties": { "level": { "type": "string" }, "text": { "type": "string" }, "route": { "type": "string" } } } }
+        }
+      },
+      "Greeting": {
+        "type": "object",
+        "properties": {
+          "language": { "type": "string", "enum": ["ar", "en"], "description": "Customer's preferred language" },
+          "call": { "type": "object", "properties": { "ar": { "type": "string" }, "en": { "type": "string" } } },
+          "outlet": { "type": "object", "properties": { "ar": { "type": "string" }, "en": { "type": "string" } } }
+        }
+      },
+      "Brief": {
+        "type": "object",
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/Meta" },
+          "matched": { "type": "boolean" },
+          "customer": { "type": "object", "nullable": true },
+          "mood": { "type": "object", "properties": { "display": { "$ref": "#/components/schemas/MoodDisplay" }, "estimate": { "$ref": "#/components/schemas/MoodEstimate" }, "agentObservation": { "$ref": "#/components/schemas/AgentObservation" } } },
+          "greeting": { "$ref": "#/components/schemas/Greeting" },
+          "tone": { "type": "object", "properties": { "style": { "type": "array", "items": { "type": "string" } }, "guidance": { "type": "string" }, "avoid": { "type": "array", "items": { "type": "string" } } } },
+          "nextActions": { "type": "array", "items": { "type": "object", "properties": { "priority": { "type": "string", "enum": ["urgent", "high", "normal"] }, "text": { "type": "string" } } } },
+          "alerts": { "type": "object", "properties": { "escalation": { "$ref": "#/components/schemas/Escalation" }, "missedCommitments": { "type": "array", "items": { "type": "object" } }, "frustrationTriggers": { "type": "array", "items": { "type": "object" } } } },
+          "openIssues": { "type": "integer" },
+          "links": { "type": "object", "nullable": true }
+        }
+      },
+      "CustomerSearchResult": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "name": { "type": "string" }, "nameAr": { "type": "string" }, "phone": { "type": "string" }, "segment": { "type": "string" },
+          "region": { "type": "string" }, "language": { "type": "string" }, "demo": { "type": "boolean" },
+          "mood": { "$ref": "#/components/schemas/MoodDisplay" }, "escalation": { "type": "string" }
+        }
+      },
+      "FollowUp": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "title": { "type": "string" }, "category": { "type": "string" }, "createdAt": { "type": "string", "format": "date-time" },
+          "dueAt": { "type": "string", "format": "date-time" }, "status": { "type": "string", "enum": ["open", "done", "cancelled"] },
+          "completedAt": { "type": "string", "format": "date-time", "nullable": true }, "owner": { "type": "string" }, "ticketId": { "type": "string", "nullable": true }
+        }
+      },
+      "CallEvent": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "receivedAt": { "type": "string", "format": "date-time" }, "phone": { "type": "string" },
+          "mode": { "type": "string", "enum": ["live", "simulated"] }, "source": { "type": "string" }, "agentId": { "type": "string", "nullable": true },
+          "customerId": { "type": "string", "nullable": true }, "customerName": { "type": "string", "nullable": true }, "mood": { "$ref": "#/components/schemas/MoodDisplay" }
+        }
+      }
+    }
+  }
+}

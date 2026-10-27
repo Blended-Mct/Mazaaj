@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mizaj call popup</title>
+  <meta name="description" content="Mood brief for the caller on the line — Mizaj (مزاج).">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/mizaj.css">
+  <script type="module" src="/js/popup.js"></script>
+</head>
+<body class="popup-body">
+  <header class="popup-top">
+    <a class="brand" href="/" target="mizaj-main" aria-label="Open Mizaj web app">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--accent)"/><circle cx="11.5" cy="13" r="1.9" fill="var(--accent-ink)"/><circle cx="20.5" cy="13" r="1.9" fill="var(--accent-ink)"/><path d="M9.5 19.5c1.7 2.3 4 3.5 6.5 3.5s4.8-1.2 6.5-3.5" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span class="brand-name">Mizaj<span class="ar" lang="ar">مزاج</span></span>
+    </a>
+    <span class="chip chip-demo" title="Fictional customers, simulated data sources">DEMO</span>
+  </header>
+  <main class="popup-wrap">
+    <div id="brief"></div>
+    <div class="popup-tools" id="tools">
+      <form class="popup-lookup" id="lookup" autocomplete="off">
+        <label class="sr-only" for="lookup-phone">Look up a number</label>
+        <input id="lookup-phone" type="search" inputmode="tel" placeholder="Look up a number">
+        <button type="submit" class="btn">Look up</button>
+      </form>
+      <p class="small muted" id="status" style="margin:8px 0 0"></p>
+    </div>
+  </main>
+</body>
+</html>

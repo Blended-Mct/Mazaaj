@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mizaj API</title>
+  <meta name="description" content="Integrate Mizaj customer mood estimates into CTI, CRM and other systems.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/mizaj.css">
+  <script type="module" src="/js/docs.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--accent)"/><circle cx="11.5" cy="13" r="1.9" fill="var(--accent-ink)"/><circle cx="20.5" cy="13" r="1.9" fill="var(--accent-ink)"/><path d="M9.5 19.5c1.7 2.3 4 3.5 6.5 3.5s4.8-1.2 6.5-3.5" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <span><span class="brand-name">Mizaj<span class="ar" lang="ar">مزاج</span></span><span class="brand-tag">API &amp; integration guide</span></span>
+      </a>
+      <nav class="nav" aria-label="Main"><a href="/">Web app</a><a href="/popup">Call popup</a><a href="/api/v1/openapi.json">OpenAPI spec</a></nav>
+    </div>
+    <div class="demo-banner" role="note"><div><strong>DEMO</strong><span>Responses contain fictional customers. Every response carries <code>meta.dataMode: "demo"</code>.</span></div></div>
+  </header>
+
+  <main class="doc">
+    <h1>Mizaj API</h1>
+    <p>Mizaj has three channels. They all use the same mood engine and return the same estimate.</p>
+    <ol>
+      <li><b>Web app</b> (<a href="/">/</a>): agents search by phone number and see the full customer profile.</li>
+      <li><b>Call popup</b> (<a href="/popup">/popup</a>): a short mood brief that appears when a call comes in, opened by the CTI system or kept open beside the softphone.</li>
+      <li><b>API</b> (<code>/api/v1</code>): JSON for CRM, IVR, chat and other systems, plus an embeddable card.</li>
+    </ol>
+    <p>There is <b>no login</b>, by design. Run Mizaj on the agent network or behind your existing gateway or SSO proxy.</p>
+
+    <h2>Read this first: estimates, not facts</h2>
+    <ul>
+      <li>Every mood is an <b>estimate</b> (<code>isEstimate: true</code>) built only from interaction evidence: tickets, calls, messages, surveys, visits, follow-ups, incidents and bills. It never uses age, gender, nationality or tenure.</li>
+      <li>If evidence is too thin or too old, the mood is <code>"unknown"</code> and <code>unknownReason</code> says why. Show “Unknown”. Never fill in a default mood.</li>
+      <li>Each estimate includes a <code>confidence</code> level (<code>high</code> / <code>medium</code> / <code>low</code> / <code>none</code>), the <code>reasons</code> behind it, the evidence that points the other way (<code>counterEvidence</code>), <code>lastEvidenceAt</code> and <code>computedAt</code>.</li>
+      <li>Agents can confirm or correct a mood. An active agent observation is returned as <code>agentObservation</code>. <code>display</code> tells you which one to lead with, and <code>display.sourceLabel</code> gives the label to show (“Estimated”, “Agent-reported”, “Agent-confirmed”).</li>
+      <li>Always show the label and the disclaimer next to a mood. Never show the mood as a bare fact.</li>
+    </ul>
+
+    <h2>Quick start</h2>
+    <pre><code># Mood brief for a caller (what the popup shows)
+curl '{{origin}}/api/v1/lookup?phone=90001001'
+
+# Full profile for the web app
+curl '{{origin}}/api/v1/customers/C1001'
+
+# Tell Mizaj a call is ringing → open agent screens show the brief
+curl -X POST '{{origin}}/api/v1/calls/incoming' \
+  -H 'Content-Type: application/json' \
+  -d '{"phone":"+968 9000 1001","callId":"CTI-123","agentId":"CC-214"}'</code></pre>
+
+    <h2>Endpoints</h2>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/lookup?phone=</span><span class="desc">Mood brief by phone number. Use this for IVR, CRM side panels and screen-pops. If no customer matches, returns <code>matched: false</code> with mood <code>unknown</code>.</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/customers?q=</span><span class="desc">Search by full or partial phone number, name or account number. Each result includes its current mood label.</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/customers/{id}</span><span class="desc">Unified profile: services, bills, tickets, calls, messages, feedback, visits, unresolved issues, follow-ups, timeline, mood, suggestions and alerts.</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/customers/{id}/brief</span><span class="desc">The same brief as <code>/lookup</code>, by customer id.</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/customers/{id}/mood</span><span class="desc">Full estimate with all reasons, plus agent observation, escalation, missed commitments, frustration triggers and suggestions.</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/customers/{id}/timeline?type=</span><span class="desc">Interaction timeline, newest first. Optional type filter: <code>call</code>, <code>message</code>, <code>ticket</code>, <code>feedback</code>, <code>visit</code>, <code>followUp</code>, <code>incident</code>, <code>mood</code>.</span></div>
+    <div class="endpoint"><span class="verb">POST</span><span class="path">/api/v1/customers/{id}/mood-feedback</span><span class="desc">Confirm or correct a mood. Body: <code>{"verdict":"confirmed"}</code> or <code>{"verdict":"corrected","mood":"neutral","note":"…","agent":"Huda (CC-214)"}</code>. Moods: <code>positive</code>, <code>neutral</code>, <code>frustrated</code>, <code>upset</code>.</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/customers/{id}/follow-ups</span><span class="desc">Commitments made to the customer. Each includes an <code>overdue</code> flag.</span></div>
+    <div class="endpoint"><span class="verb">POST</span><span class="path">/api/v1/customers/{id}/follow-ups</span><span class="desc">Log a commitment. Body: <code>{"title":"Call back with ETA","dueAt":"2026-10-28T09:00:00Z","owner":"Huda"}</code>.</span></div>
+    <div class="endpoint"><span class="verb">PATCH</span><span class="path">/api/v1/follow-ups/{id}</span><span class="desc">Update a follow-up. Body: <code>{"status":"done"}</code> (or <code>"open"</code> / <code>"cancelled"</code>).</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/dashboard?days=30</span><span class="desc">Team view: estimated mood mix by week, recurring issues, regions, escalations, missed commitments and agent feedback. <code>days</code> can be 30, 60 or 90.</span></div>
+    <div class="endpoint"><span class="verb">POST</span><span class="path">/api/v1/calls/incoming</span><span class="desc"><b>Live CTI webhook.</b> Body: <code>{"phone","callId?","agentId?","queue?"}</code>. Pushes the brief to agent screens listening on <code>/api/v1/events</code> and returns it. If <code>MIZAJ_CTI_KEY</code> is set, send it in the <code>X-Api-Key</code> header.</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/events?agentId=</span><span class="desc">Server-Sent Events stream of <code>incoming-call</code> events. With <code>agentId</code>, a listener receives only calls for that agent, plus calls sent without one.</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/calls/recent</span><span class="desc">The last 25 call events. Each is tagged <code>mode: "live"</code> (CTI webhook) or <code>"simulated"</code> (demo button).</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/integrations</span><span class="desc">Which sources are simulated and which channels are live.</span></div>
+    <div class="endpoint"><span class="verb">GET</span><span class="path">/api/v1/meta</span><span class="desc">Engine version, thresholds, mood list and categories.</span></div>
+    <div class="endpoint"><span class="verb">POST</span><span class="path">/api/v1/demo/simulate-call</span><span class="desc">Demo only: sends a <b>simulated</b> call, either for <code>{"phone"}</code> or for a random demo customer.</span></div>
+    <div class="endpoint"><span class="verb">POST</span><span class="path">/api/v1/demo/reset</span><span class="desc">Demo only: clears agent corrections and follow-up changes, and rebuilds the demo data around the current time.</span></div>
+
+    <h2>Screen-pop and embedding</h2>
+    <p>A CTI or softphone can open the popup straight to the caller:</p>
+    <pre><code>{{origin}}/popup?phone=96890001001</code></pre>
+    <p>To embed the mood card in another system (CRM side panel, ticket view), add <code>embed=1</code>:</p>
+    <pre><code>&lt;iframe src="{{origin}}/popup?phone=96890001001&amp;embed=1"
+        width="420" height="720" style="border:0" title="Customer mood (Mizaj)"&gt;&lt;/iframe&gt;</code></pre>
+    <p>Set <code>MIZAJ_EMBED_ORIGINS</code> (for example <code>https://crm.example.om</code>) to control which sites may frame the card.</p>
+
+    <h2>Brief response (abridged)</h2>
+    <pre><code>{
+  "meta": { "dataMode": "demo", "demoNotice": "Demo data — …" },
+  "matched": true,
+  "customer": { "id": "C1001", "name": "Salim Al-Harthy", "phone": "+96890001001", "language": "ar", "demo": true },
+  "mood": {
+    "display": { "mood": "upset", "label": "Upset", "source": "estimate", "sourceLabel": "Estimated" },
+    "estimate": {
+      "isEstimate": true, "mood": "upset",
+      "confidence": { "level": "high", "label": "High", "value": 1 },
+      "lastEvidenceAt": "…", "computedAt": "…", "signalCount": 20,
+      "reasons": [ { "text": "8 contacts about slow home internet in the last 14 days", "direction": "negative", … } ],
+      "unknownReason": null,
+      "disclaimer": "Estimated from recent interaction data. This is not a fact — confirm with the customer."
+    },
+    "agentObservation": null
+  },
+  "greeting": { "language": "ar", "call": { "ar": "…", "en": "…" }, "outlet": { "ar": "…", "en": "…" } },
+  "tone": { "style": ["Calm", "Apologetic", "Take ownership"], "guidance": "…", "avoid": ["…"] },
+  "nextActions": [ { "priority": "urgent", "text": "Escalate to Retention desk: …" } ],
+  "alerts": { "escalation": { "needed": true, "level": "urgent", "route": "Retention desk", "reasons": [ … ] },
+              "missedCommitments": [ … ], "frustrationTriggers": [ … ] }
+}</code></pre>
+
+    <h2>How the estimate works</h2>
+    <p>The <code>rules-v1</code> engine turns each interaction from the last 90 days into a weighted signal. Recent signals count more: their weight halves every 21 days. Open tickets, missed promises and active incidents count in full for as long as they stay open. The signals are added up into a score:</p>
+    <ul>
+      <li>−40 or below: <b>Upset</b> · −40 to −12: <b>Frustrated</b> · −12 to +12: <b>Neutral</b> · +12 or above: <b>Positive</b></li>
+      <li>Fewer than 2 meaningful signals, or total evidence below 8 points: <b>Unknown</b></li>
+      <li>Confidence rises with the amount, consistency, freshness and strength of the evidence. It is lowered when signals are mixed, or when the most recent interaction points the other way.</li>
+      <li>An agent observation stays in force for 72 hours, or until newer evidence arrives, whichever comes first.</li>
+    </ul>
+    <p>Escalation is flagged when a customer mentions cancelling, switching provider, the regulator, legal action or going public; when two or more commitments are missed; when a ticket is open for more than twice its SLA; after four or more contacts about the same issue in 14 days; or when the customer is upset (estimated with high confidence, or reported by an agent).</p>
+
+    <h2>Configuration</h2>
+    <pre><code>PORT=3000                     # HTTP port
+HOST=0.0.0.0                  # bind address
+MIZAJ_CTI_KEY=…               # require X-Api-Key on POST /api/v1/calls/incoming
+MIZAJ_CORS_ORIGIN=*           # Access-Control-Allow-Origin for /api
+MIZAJ_EMBED_ORIGINS=*         # frame-ancestors for /popup (embedding)
+MIZAJ_STATE_FILE=.mizaj/state.json   # where corrections &amp; follow-ups are saved ("" = memory only)</code></pre>
+  </main>
+</body>
+</html>

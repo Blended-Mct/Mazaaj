@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mizaj — Customer Mood</title>
+  <meta name="description" content="Mizaj (مزاج) — Customer Mood Intelligence. Know the mood before you say hello.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/mizaj.css">
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#/" aria-label="Mizaj home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--accent)"/><circle cx="11.5" cy="13" r="1.9" fill="var(--accent-ink)"/><circle cx="20.5" cy="13" r="1.9" fill="var(--accent-ink)"/><path d="M9.5 19.5c1.7 2.3 4 3.5 6.5 3.5s4.8-1.2 6.5-3.5" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <span>
+          <span class="brand-name">Mizaj<span class="ar" lang="ar">مزاج</span></span>
+          <span class="brand-tag">Know the mood before you say hello.</span>
+        </span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="#/" data-nav="search">Customers</a>
+        <a href="#/dashboard" data-nav="dashboard">Dashboard</a>
+        <a href="#/integrations" data-nav="integrations">Integrations</a>
+        <a href="/docs" target="_blank" rel="noopener">API</a>
+      </nav>
+      <div class="topbar-tools">
+        <form class="quick-search" id="quick-search" role="search" autocomplete="off" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" inputmode="tel" placeholder="Phone number" aria-label="Search customer by phone number">
+          <div class="results" hidden></div>
+        </form>
+        <button type="button" class="btn btn-sm" data-action="simulate-call" title="Send a simulated incoming call through the CTI path">Simulate call</button>
+        <button type="button" class="btn btn-sm btn-ghost hide-sm" data-action="open-popup" title="Open the call popup in its own small window">Call popup ↗</button>
+        <details class="settings">
+          <summary class="btn btn-sm btn-ghost" aria-label="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+            <span id="agent-label">Agent</span>
+          </summary>
+          <div class="settings-panel">
+            <label class="field">Your name (shown on mood corrections)
+              <input id="pref-agent" type="text" maxlength="60" placeholder="e.g. Huda (CC-214)">
+            </label>
+            <label class="field">You work in
+              <select id="pref-workplace">
+                <option value="call">Call centre — greet callers</option>
+                <option value="outlet">Outlet — greet visitors</option>
+              </select>
+            </label>
+            <span class="small muted">Saved in this browser only. No login needed.</span>
+          </div>
+        </details>
+      </div>
+    </div>
+    <div class="demo-banner" role="note">
+      <div><strong>DEMO</strong><span>Fictional customers · all customer data sources simulated.</span><a href="#/integrations">What’s live?</a></div>
+    </div>
+  </header>
+
+  <main id="view" class="view" tabindex="-1"></main>
+
+  <div class="call-dock" id="call-dock" aria-live="polite"></div>
+</body>
+</html>

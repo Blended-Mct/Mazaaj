@@ -1,0 +1,4 @@
+node_modules/
+.mizaj/
+*.log
+.DS_Store

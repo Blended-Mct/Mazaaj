@@ -1,0 +1,17 @@
+{
+  "name": "mizaj",
+  "version": "1.0.0",
+  "description": "Mizaj (مزاج) — Customer Mood Intelligence for Omantel call centre and outlet agents. Know the mood before you say hello.",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}
