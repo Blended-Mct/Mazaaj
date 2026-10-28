@@ -5,6 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStore } from './src/data/store.js';
+import { fileState } from './src/data/file-state.js';
 import { createApp } from './src/server/app.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -14,7 +15,7 @@ const port = Number(env.PORT) || 3000;
 const host = env.HOST || '0.0.0.0';
 const stateFile = env.MIZAJ_STATE_FILE === undefined ? path.join(root, '.mizaj', 'state.json') : env.MIZAJ_STATE_FILE || null;
 
-const store = createStore({ stateFile });
+const store = createStore({ persistence: stateFile ? fileState(stateFile) : null });
 const app = createApp({
   store,
   publicDir: path.join(root, 'public'),

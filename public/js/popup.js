@@ -53,7 +53,7 @@ document.addEventListener('click', async (e) => {
   } else if (el.dataset.action === 'open-profile' && window.opener && !window.opener.closed) {
     // Reuse the agent's main Mizaj tab when the popup was opened from it.
     e.preventDefault();
-    window.opener.location.hash = `#/customer/${el.dataset.id}`;
+    window.opener.location.hash = `customer-${el.dataset.id}`;
     window.opener.focus();
   }
 });

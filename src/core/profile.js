@@ -108,7 +108,7 @@ export function buildBrief(customer, { corrections, now }) {
       frustrationTriggers: a.triggers.slice(0, 4),
     },
     openIssues: unresolvedIssues(customer, now).length,
-    links: { profile: `/#/customer/${customer.id}`, api: `/api/v1/customers/${customer.id}` },
+    links: { profile: `/#customer-${customer.id}`, api: `/api/v1/customers/${customer.id}` },
   };
 }
 

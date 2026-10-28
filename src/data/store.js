@@ -1,9 +1,8 @@
 // In-memory customer store backed by the demo data generator.
-// Agent actions (mood corrections, follow-ups) are kept in a small JSON state
-// file so they survive restarts. Set MIZAJ_STATE_FILE="" to keep them in memory only.
+// Agent actions (mood corrections, follow-ups) go to an optional `persistence`
+// adapter — a JSON file on the server (./file-state.js), browser storage in the
+// hosted demo — so they survive restarts. No adapter = memory only.
 
-import fs from 'node:fs';
-import path from 'node:path';
 import { generateDemoData } from './demo-data.js';
 import { AGENT_MOODS } from '../core/mood-engine.js';
 import { iso, ts } from '../core/time.js';
@@ -26,40 +25,29 @@ export function normalizePhone(raw) {
 
 const clean = (v, max) => String(v ?? '').trim().slice(0, max);
 
-export function createStore({ now = Date.now(), stateFile = null, populationSize } = {}) {
+/**
+ * @param {object} [o]
+ * @param {{ load(): object|null, save(state: object): void, flush?(): void }} [o.persistence]
+ */
+export function createStore({ now = Date.now(), persistence = null, populationSize } = {}) {
   let customers = [];
   let byId = new Map();
   let byPhone = new Map();
   let seedCorrections = [];
   let state = emptyState();
   const recentCalls = [];
-  let writeTimer = null;
 
   function emptyState() {
     return { version: 1, corrections: [], followUpUpdates: {}, addedFollowUps: [] };
   }
 
   function load() {
-    if (!stateFile) return emptyState();
-    try {
-      const parsed = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-      return { ...emptyState(), ...parsed };
-    } catch (err) {
-      if (err.code !== 'ENOENT') console.warn(`[mizaj] Ignoring unreadable state file ${stateFile}: ${err.message}`);
-      return emptyState();
-    }
+    const saved = persistence?.load();
+    return saved && typeof saved === 'object' ? { ...emptyState(), ...saved } : emptyState();
   }
 
   function persist() {
-    if (!stateFile) return;
-    clearTimeout(writeTimer);
-    writeTimer = setTimeout(() => {
-      fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-      const tmp = `${stateFile}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-      fs.renameSync(tmp, stateFile);
-    }, 150);
-    writeTimer.unref?.();
+    persistence?.save(state);
   }
 
   function build(generatedAt) {
@@ -198,10 +186,7 @@ export function createStore({ now = Date.now(), stateFile = null, populationSize
     },
 
     flush() {
-      if (!stateFile || !writeTimer) return;
-      clearTimeout(writeTimer);
-      fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-      fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
+      persistence?.flush?.();
     },
   };
 }

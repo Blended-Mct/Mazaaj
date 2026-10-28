@@ -14,11 +14,14 @@ const DATA_SOURCES = [
   { key: 'follow_ups', name: 'Follow-up tracking', provides: 'Commitments made to customers and their status' },
 ];
 
-export function integrationStatus({ ctiKeyConfigured, calls, generatedAt }) {
+/** `hosted` = the in-browser demo, where no server is running and no endpoint is reachable. */
+export function integrationStatus({ ctiKeyConfigured, calls, generatedAt, hosted = false }) {
   const live = calls.filter((c) => c.mode === 'live');
   const simulated = calls.filter((c) => c.mode === 'simulated');
+  const offline = 'Not running in this hosted demo — available when you run the server (npm start)';
   return {
-    summary: { live: 0, simulated: DATA_SOURCES.length, liveCapableEndpoints: 1 },
+    hosted,
+    summary: { live: 0, simulated: DATA_SOURCES.length, liveCapableEndpoints: hosted ? 0 : 1 },
     dataSources: DATA_SOURCES.map((s) => ({
       ...s,
       mode: 'simulated',
@@ -30,16 +33,16 @@ export function integrationStatus({ ctiKeyConfigured, calls, generatedAt }) {
       {
         key: 'cti',
         name: 'CTI screen-pop (incoming calls)',
-        mode: live.length ? 'live' : 'ready',
-        status: live.length ? 'Live — receiving call events' : 'Ready — waiting for the first live call event',
+        mode: hosted ? 'offline' : live.length ? 'live' : 'ready',
+        status: hosted ? offline : live.length ? 'Live — receiving call events' : 'Ready — waiting for the first live call event',
         endpoint: 'POST /api/v1/calls/incoming',
         security: ctiKeyConfigured ? 'X-Api-Key required' : 'Open (set MIZAJ_CTI_KEY to require a key)',
         liveEvents: live.length,
         simulatedEvents: simulated.length,
         lastLiveEventAt: live[0]?.receivedAt || null,
       },
-      { key: 'rest', name: 'REST API for other systems', mode: 'live', status: 'Live', endpoint: '/api/v1', security: 'Network-level (no login, by design)' },
-      { key: 'embed', name: 'Embeddable mood card (iframe)', mode: 'live', status: 'Live', endpoint: '/popup?phone=…&embed=1', security: 'Frame ancestors set by MIZAJ_EMBED_ORIGINS' },
+      { key: 'rest', name: 'REST API for other systems', mode: hosted ? 'offline' : 'live', status: hosted ? offline : 'Live', endpoint: '/api/v1', security: 'Network-level (no login, by design)' },
+      { key: 'embed', name: 'Embeddable mood card (iframe)', mode: hosted ? 'offline' : 'live', status: hosted ? offline : 'Live', endpoint: '/popup?phone=…&embed=1', security: 'Frame ancestors set by MIZAJ_EMBED_ORIGINS' },
     ],
   };
 }

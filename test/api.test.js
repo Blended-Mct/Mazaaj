@@ -12,7 +12,7 @@ let app;
 let base;
 
 before(async () => {
-  const store = createStore({ stateFile: null, populationSize: 30 });
+  const store = createStore({ populationSize: 30 });
   app = createApp({ store, publicDir: path.join(root, 'public'), ctiKey: 'secret-key' });
   server = http.createServer(app.handler);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));

@@ -27,7 +27,18 @@ export function render(el, content) {
 }
 
 // ---------------------------------------------------------------- API
+// By default the UI talks to the Mizaj server. The hosted demo swaps in an
+// in-browser transport (src/browser/local-server.js) that runs the same API.
+let transport = null;
+export const runtime = { mode: 'server' };
+
+export function useLocalTransport(t) {
+  transport = t;
+  runtime.mode = 'hosted';
+}
+
 export async function api(path, { method = 'GET', body } = {}) {
+  if (transport) return transport.request(method, path, body);
   const res = await fetch(`/api/v1${path}`, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -326,6 +337,10 @@ export async function quickCorrect(customerId, mood) {
 
 /** Subscribes to incoming-call events. Returns the EventSource. */
 export function subscribeCalls(onCall, { onStatus } = {}) {
+  if (transport) {
+    onStatus?.('connected');
+    return transport.subscribe(onCall);
+  }
   const es = new EventSource('/api/v1/events');
   es.addEventListener('incoming-call', (e) => {
     try { onCall(JSON.parse(e.data)); } catch { /* ignore malformed event */ }

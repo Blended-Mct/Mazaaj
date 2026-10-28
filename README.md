@@ -15,12 +15,20 @@ npm start            # Node 18+. No dependencies to install.
 
 There is no login screen, by design. Type a phone number such as `9000 1001` and press Enter.
 
+### Hosted demo (no server)
+
+```bash
+npm run build:demo   # → dist/mizaj-demo.html
+```
+
+This builds the whole web app into **one self-contained HTML page** that runs in any browser with no server. The same API handlers, demo data and mood engine run inside the page (`src/browser/local-server.js`), and agent corrections and follow-ups are saved in the viewer's browser. Use it to share the demo. The CTI webhook, REST API and iframe embed only exist when the server runs, and the hosted page says so on its Integrations and API views.
+
 ## Three channels
 
 | Channel | Where | What it's for |
 |---|---|---|
 | **Web app** | `/` | Search by phone number to open the unified profile: mood, greeting, tone, next actions, alerts, unresolved issues, follow-ups, services and bills, surveys and the full timeline. Also includes the team dashboard and the integrations page. |
-| **Call popup** | `/popup` | The brief an agent needs while the phone rings. Keep it open beside the softphone and it updates on each incoming call. A CTI system can also open `/popup?phone=…` directly. |
+| **Call popup** | `/popup` | The brief an agent needs while the phone rings. Keep it open beside the softphone and it updates on each incoming call. A CTI system can also open `/popup?phone=…` directly. The **Call popup** tab in the web app shows the same thing in-page. |
 | **API** | `/api/v1`, docs at `/docs` | JSON for CRM, IVR and chat systems: `GET /lookup?phone=`, the full profile, mood feedback, follow-ups, the dashboard, a live **CTI webhook** (`POST /calls/incoming`), a Server-Sent Events stream and an embeddable card (`/popup?phone=…&embed=1`). OpenAPI spec: `/api/v1/openapi.json`. |
 
 ## Two-minute tour
@@ -75,8 +83,10 @@ The suggestions are in `src/core/insights.js`:
 server.js                 entry point (node:http, no dependencies)
 src/core/                 mood engine, sentiment cues, insights, timeline, profile/brief, dashboard
 src/data/                 demo data generator, store (+ JSON state), integration registry
-src/server/               HTTP routing, static files, Server-Sent Events
+src/server/               API route handlers (api.js), HTTP layer, Server-Sent Events
+src/browser/              in-browser API for the hosted demo
 public/                   web app (index.html), call popup (popup.html), API docs (docs.html), OpenAPI
+scripts/                  build-hosted-demo.mjs (single-page hosted demo)
 test/                     node:test suites for the engine and the API
 ```
 

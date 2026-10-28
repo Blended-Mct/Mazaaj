@@ -3,7 +3,7 @@
 
 import {
   html, render, api, prefs, fmt, icon, moodBadge, moodIcon, confidence, demoChip, reasonItem, actionItem,
-  greetingBlock, handleGreetingAction, escalationAlert, missedAlert, briefCard, quickCorrect, subscribeCalls, toast, MOOD_LABEL, quoted,
+  greetingBlock, handleGreetingAction, escalationAlert, missedAlert, briefCard, quickCorrect, subscribeCalls, toast, MOOD_LABEL, quoted, runtime,
 } from './lib.js';
 import { moodMixChart, moodMixTable, barList, deltaNote } from './charts.js';
 
@@ -21,18 +21,21 @@ const state = {
   dashboard: null,
   tables: {},
   shownCalls: new Set(),
+  popupCall: null,
 };
 
 // ------------------------------------------------------------------ Routing
+// Routes are plain hash names (#dashboard, #customer-C1001) so they survive
+// hosts that only pass simple fragments; older slash-style links still parse.
+
+const VIEWS = ['dashboard', 'integrations', 'popup', 'api'];
 
 function parseRoute() {
-  const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
-  if (!parts.length) return { name: 'search' };
-  if (parts[0] === 'customer' && parts[1]) return { name: 'customer', id: parts[1] };
-  if (parts[0] === 'phone' && parts[1]) return { name: 'phone', phone: parts[1] };
-  if (parts[0] === 'dashboard') return { name: 'dashboard' };
-  if (parts[0] === 'integrations') return { name: 'integrations' };
-  return { name: 'notfound' };
+  const h = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
+  const m = /^(customer|phone)[-/](.+)$/.exec(h);
+  if (m) return m[1] === 'customer' ? { name: 'customer', id: m[2] } : { name: 'phone', phone: m[2] };
+  if (!h) return { name: 'search' };
+  return VIEWS.includes(h) ? { name: h } : { name: 'notfound' };
 }
 
 function setNav(name) {
@@ -53,9 +56,11 @@ async function route() {
     else if (r.name === 'phone') await viewPhone(r.phone);
     else if (r.name === 'dashboard') await viewDashboard();
     else if (r.name === 'integrations') await viewIntegrations();
-    else render(view, html`<div class="card"><h2>Page not found</h2><p><a href="#/">Back to search</a></p></div>`);
+    else if (r.name === 'popup') viewPopup();
+    else if (r.name === 'api') viewApi();
+    else render(view, html`<div class="card"><h2>Page not found</h2><p><a href="#">Back to search</a></p></div>`);
   } catch (err) {
-    render(view, html`<div class="card"><h2>Something went wrong</h2><p class="muted">${err.message}</p><p><a href="#/">Back to search</a></p></div>`);
+    render(view, html`<div class="card"><h2>Something went wrong</h2><p class="muted">${err.message}</p><p><a href="#">Back to search</a></p></div>`);
   }
 }
 
@@ -81,7 +86,7 @@ function wireSearch(form) {
     if (!results.length) {
       render(box, html`<div class="result"><span class="who"><b>No match</b><span>No demo customer matches “${q}”. Try 9000 1001.</span></span></div>`);
     } else {
-      render(box, results.map((c, i) => html`<a class="result ${i === active ? 'active' : ''}" href="#/customer/${c.id}" data-id="${c.id}">
+      render(box, results.map((c, i) => html`<a class="result ${i === active ? 'active' : ''}" href="#customer-${c.id}" data-id="${c.id}">
         <span class="who"><b>${c.name}</b><span>${fmt.phone(c.phone)} · ${c.segment} · ${c.region}</span></span>${moodChip(c.mood)}</a>`));
     }
     box.hidden = false;
@@ -122,9 +127,9 @@ function wireSearch(form) {
     if (pick) {
       box.hidden = true;
       input.value = '';
-      location.hash = `#/customer/${pick.id}`;
+      location.hash = `#customer-${pick.id}`;
     } else if (q.replace(/\D/g, '').length >= 8) {
-      location.hash = `#/phone/${q.replace(/\D/g, '')}`;
+      location.hash = `#phone-${q.replace(/\D/g, '')}`;
     }
   });
   box.addEventListener('click', () => { box.hidden = true; input.value = ''; });
@@ -155,7 +160,7 @@ async function viewSearch() {
   form.querySelector('input').focus();
 
   const [demo, calls] = await Promise.all([api('/demo/customers'), api('/calls/recent')]);
-  render(document.getElementById('demo-grid'), demo.customers.map((c) => html`<a class="demo-card" href="#/customer/${c.id}">
+  render(document.getElementById('demo-grid'), demo.customers.map((c) => html`<a class="demo-card" href="#customer-${c.id}">
     <div class="top"><div><b>${c.name}</b><div class="phone">${fmt.phone(c.phone)}</div></div>${moodChip(c.mood)}</div>
     <p>${c.story}</p>
     ${c.escalation !== 'none' ? html`<span class="chip chip-${c.escalation}" style="justify-self:start">${c.escalation === 'urgent' ? icon.stop : icon.warn} Escalation ${c.escalation}</span>` : ''}
@@ -165,7 +170,7 @@ async function viewSearch() {
       <div class="card"><ul class="list">${calls.calls.slice(0, 6).map((c) => html`<li style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <span class="chip ${c.mode === 'live' ? 'chip-live' : 'chip-sim'}">${c.mode === 'live' ? 'LIVE CTI' : 'SIMULATED'}</span>
         <span class="tabular">${fmt.time(c.receivedAt)}</span>
-        ${c.customerId ? html`<a href="#/customer/${c.customerId}">${c.customerName}</a>` : html`<span>${fmt.phone(c.phone)} (no record)</span>`}
+        ${c.customerId ? html`<a href="#customer-${c.customerId}">${c.customerName}</a>` : html`<span>${fmt.phone(c.phone)} (no record)</span>`}
         ${moodBadge(c.mood.mood, { qualifier: c.mood.source === 'agent' ? 'Agent' : 'Est.' })}
       </li>`)}</ul></div>`);
   }
@@ -176,12 +181,12 @@ async function viewPhone(phone) {
   loading('customer');
   const brief = await api(`/lookup?phone=${encodeURIComponent(phone)}`);
   if (brief.matched) {
-    location.replace(`#/customer/${brief.customer.id}`);
+    location.replace(`#customer-${brief.customer.id}`);
     return;
   }
   pageTitle('No match');
   render(view, html`<div style="max-width:560px;margin:24px auto" class="stack-gap">
-    <p><a href="#/">← Back to search</a></p>
+    <p><a href="#">← Back to search</a></p>
     ${briefCard(brief, { workplace: prefs.get().workplace })}
   </div>`);
 }
@@ -435,7 +440,7 @@ function renderDashboard() {
         <div class="card-head"><div><h2>Needs escalation</h2><div class="sub">Rule-based flags · urgent first</div></div></div>
         ${d.escalations.length ? html`<div class="table-wrap"><table class="data-table"><thead><tr><th>Customer</th><th>Mood</th><th>Why</th><th>Route to</th></tr></thead><tbody>
           ${d.escalations.slice(0, 10).map((e) => html`<tr>
-            <td><a href="#/customer/${e.customer.id}">${e.customer.name}</a><div class="small muted tabular">${fmt.phone(e.customer.phone)}</div></td>
+            <td><a href="#customer-${e.customer.id}">${e.customer.name}</a><div class="small muted tabular">${fmt.phone(e.customer.phone)}</div></td>
             <td>${moodBadge(e.mood.mood, { qualifier: e.mood.source === 'agent' ? 'Agent' : 'Est.' })}</td>
             <td><span class="chip chip-${e.level}">${e.level === 'urgent' ? icon.stop : icon.warn}${e.level}</span><div class="small">${e.reason}${e.reasonCount > 1 ? html` <span class="muted">(+${e.reasonCount - 1})</span>` : ''}</div></td>
             <td class="small">${e.route}</td></tr>`)}
@@ -452,14 +457,14 @@ function renderDashboard() {
       <section class="card">
         <div class="card-head"><div><h2>Missed commitments</h2><div class="sub">Follow-ups past their due date</div></div></div>
         ${d.overdueFollowUps.length ? html`<div class="table-wrap"><table class="data-table"><thead><tr><th>Customer</th><th>Promise</th><th class="num">Overdue</th></tr></thead><tbody>
-          ${d.overdueFollowUps.slice(0, 10).map((f) => html`<tr><td><a href="#/customer/${f.customer.id}">${f.customer.name}</a></td><td>${f.title}<div class="small muted">${f.owner}</div></td><td class="num nowrap">${f.overdueBy}</td></tr>`)}
+          ${d.overdueFollowUps.slice(0, 10).map((f) => html`<tr><td><a href="#customer-${f.customer.id}">${f.customer.name}</a></td><td>${f.title}<div class="small muted">${f.owner}</div></td><td class="num nowrap">${f.overdueBy}</td></tr>`)}
         </tbody></table></div>` : html`<p class="empty">No missed commitments.</p>`}
       </section>
       <section class="card">
         <div class="card-head"><div><h2>Agent feedback on estimates</h2><div class="sub">Confirmations and corrections help tune the rules</div></div></div>
         ${d.corrections.recent.length ? html`
           ${d.corrections.commonChanges.length ? html`<p class="small">Most common correction: <b>${MOOD_LABEL[d.corrections.commonChanges[0].from]} → ${MOOD_LABEL[d.corrections.commonChanges[0].to]}</b> (${d.corrections.commonChanges[0].count}×)</p>` : ''}
-          <ul class="list">${d.corrections.recent.map((c) => html`<li class="small"><a href="#/customer/${c.customerId}">${c.customerName}</a> — ${c.verdict === 'confirmed' ? html`confirmed <b>${MOOD_LABEL[c.mood]}</b>` : html`estimate <b>${MOOD_LABEL[c.estimateAtTime?.mood] || '—'}</b> corrected to <b>${MOOD_LABEL[c.mood]}</b>`} · ${c.agent} · ${fmt.rel(c.at)}</li>`)}</ul>`
+          <ul class="list">${d.corrections.recent.map((c) => html`<li class="small"><a href="#customer-${c.customerId}">${c.customerName}</a> — ${c.verdict === 'confirmed' ? html`confirmed <b>${MOOD_LABEL[c.mood]}</b>` : html`estimate <b>${MOOD_LABEL[c.estimateAtTime?.mood] || '—'}</b> corrected to <b>${MOOD_LABEL[c.mood]}</b>`} · ${c.agent} · ${fmt.rel(c.at)}</li>`)}</ul>`
           : html`<p class="empty">No agent feedback in this range yet.</p>`}
       </section>
     </div>`);
@@ -486,12 +491,16 @@ async function viewIntegrations() {
   pageTitle('Integrations');
   loading('integrations');
   const [i, calls] = await Promise.all([api('/integrations'), api('/calls/recent')]);
-  const origin = location.origin;
+  const hosted = runtime.mode === 'hosted';
+  const origin = hosted ? 'http://localhost:3000' : location.origin;
+  const chip = (mode) => ({ live: ['chip-live', 'LIVE'], ready: ['chip-ready', 'READY'], offline: ['chip-ready', 'NOT RUNNING'] }[mode]);
   render(view, html`
-    <div class="toolbar"><h1>Integrations</h1><span class="small muted">What is simulated, and what is live</span></div>
+    <div class="toolbar"><h1>Integrations</h1><span class="small muted">What is simulated, and what is live</span><button type="button" class="btn btn-sm" data-action="reset-demo">Reset demo data</button></div>
     <div class="alert alert-info" style="margin-bottom:16px"><span class="ico">${icon.info}</span><div>
       <b>${i.summary.simulated} customer data sources are simulated · ${i.summary.live} live.</b>
-      <div class="small">Every customer, ticket, message and survey in this build comes from a demo generator — no real Omantel system is connected. The channels below are real endpoints that other systems can call today.</div>
+      <div class="small">Every customer, ticket, message and survey in this build comes from a demo generator — no real Omantel system is connected. ${hosted
+        ? 'This hosted demo runs entirely in your browser, so the channels below are not running here. Start the server (npm start) and they become real endpoints other systems can call.'
+        : 'The channels below are real endpoints that other systems can call today.'}</div>
     </div></div>
 
     <section class="card">
@@ -499,7 +508,7 @@ async function viewIntegrations() {
       <div class="table-wrap"><table class="data-table"><thead><tr><th>Channel</th><th>Status</th><th>Endpoint</th><th>Security</th></tr></thead><tbody>
         ${i.channels.map((ch) => html`<tr>
           <td><b>${ch.name}</b>${ch.key === 'cti' ? html`<div class="small muted">${ch.liveEvents} live · ${ch.simulatedEvents} simulated events since start${ch.lastLiveEventAt ? ` · last live ${fmt.rel(ch.lastLiveEventAt)}` : ''}</div>` : ''}</td>
-          <td><span class="chip ${ch.mode === 'live' ? 'chip-live' : 'chip-ready'}">${ch.mode === 'live' ? 'LIVE' : 'READY'}</span>${ch.status !== 'Live' ? html`<div class="small muted">${ch.status}</div>` : ''}</td>
+          <td><span class="chip ${chip(ch.mode)[0]}">${chip(ch.mode)[1]}</span>${ch.status !== 'Live' ? html`<div class="small muted">${ch.status}</div>` : ''}</td>
           <td><code>${ch.endpoint}</code></td><td class="small">${ch.security}</td></tr>`)}
       </tbody></table></div>
     </section>
@@ -516,8 +525,8 @@ async function viewIntegrations() {
       <div class="card-head"><h2>Recent call events</h2><button type="button" class="btn btn-sm" data-action="simulate-call">Simulate call</button></div>
       ${calls.calls.length ? html`<div class="table-wrap"><table class="data-table"><thead><tr><th>Time</th><th>Origin</th><th>Number</th><th>Customer</th><th>Mood shown</th></tr></thead><tbody>
         ${calls.calls.map((c) => html`<tr><td class="tabular">${fmt.time(c.receivedAt)}</td><td><span class="chip ${c.mode === 'live' ? 'chip-live' : 'chip-sim'}">${c.mode === 'live' ? 'LIVE' : 'SIMULATED'}</span><div class="small muted">${c.source}</div></td>
-          <td class="tabular">${fmt.phone(c.phone)}</td><td>${c.customerId ? html`<a href="#/customer/${c.customerId}">${c.customerName}</a>` : 'No record'}</td><td>${moodBadge(c.mood.mood, { qualifier: c.mood.source === 'agent' ? 'Agent' : 'Est.' })}</td></tr>`)}
-      </tbody></table></div>` : html`<p class="empty">No calls yet. Use “Simulate call”, or send a live event:</p>`}
+          <td class="tabular">${fmt.phone(c.phone)}</td><td>${c.customerId ? html`<a href="#customer-${c.customerId}">${c.customerName}</a>` : 'No record'}</td><td>${moodBadge(c.mood.mood, { qualifier: c.mood.source === 'agent' ? 'Agent' : 'Est.' })}</td></tr>`)}
+      </tbody></table></div>` : html`<p class="empty">No calls yet. Use “Simulate call”${hosted ? '. With the server running, a phone system sends live events like this:' : ', or send a live event:'}</p>`}
       <pre class="small" style="overflow-x:auto;background:var(--surface-2);padding:10px;border-radius:8px"><code>curl -X POST ${origin}/api/v1/calls/incoming \\
   -H 'Content-Type: application/json' \\
   -d '{"phone":"+968 9000 1001","callId":"CTI-123","agentId":"CC-214"}'</code></pre>
@@ -529,6 +538,12 @@ async function viewIntegrations() {
 function showCall({ call, brief }) {
   if (state.shownCalls.has(call.id)) return;
   state.shownCalls.add(call.id);
+  const popupHost = document.getElementById('popup-host');
+  if (popupHost && parseRoute().name === 'popup') {
+    state.popupCall = call;
+    render(popupHost, briefCard(brief, { call, workplace: prefs.get().workplace }));
+    return;
+  }
   const wrap = document.createElement('div');
   wrap.dataset.brief = JSON.stringify({ customerId: brief.customer?.id || null });
   render(wrap, briefCard(brief, { call, workplace: prefs.get().workplace, closable: true }));
@@ -547,8 +562,62 @@ async function simulateCall(phone) {
 }
 
 function openPopupWindow() {
-  const w = window.open('/popup', 'mizaj-popup', 'popup=yes,width=440,height=760');
-  if (!w) toast('Allow pop-ups for this site to open the call popup');
+  const w = runtime.mode === 'hosted' ? null : window.open('/popup', 'mizaj-popup', 'popup=yes,width=440,height=760');
+  if (!w) location.hash = 'popup';
+}
+
+// ------------------------------------------------------------------ Call popup (in-app view)
+
+function popupWaiting() {
+  return html`<div class="card waiting">
+    <p style="margin:0 0 6px"><span class="dot" aria-hidden="true"></span><b>Waiting for the next call…</b></p>
+    <p class="small muted" style="margin:0 0 14px">The caller’s mood brief appears here as soon as the call arrives.</p>
+    <button type="button" class="btn btn-primary" data-action="simulate-call">Simulate a call</button>
+  </div>`;
+}
+
+function viewPopup() {
+  setNav('popup');
+  pageTitle('Call popup');
+  state.popupCall = null;
+  render(view, html`<div class="popup-preview">
+    <div>
+      <h1 class="popup-title">Call popup</h1>
+      <p class="small muted" style="margin:4px 0 0;max-width:62ch">What an agent sees while the phone rings: a short brief on the caller.
+        ${runtime.mode === 'hosted'
+          ? 'In production the phone system opens it as a small window (/popup?phone=…), or the agent keeps it open beside the softphone.'
+          : html`Open it as its own window at <a href="/popup" target="mizaj-popup">/popup</a>, or let the phone system open /popup?phone=….`}</p>
+    </div>
+    <div class="popup-device">
+      <div class="popup-top">
+        <span class="brand"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--accent)"/><circle cx="11.5" cy="13" r="1.9" fill="var(--accent-ink)"/><circle cx="20.5" cy="13" r="1.9" fill="var(--accent-ink)"/><path d="M9.5 19.5c1.7 2.3 4 3.5 6.5 3.5s4.8-1.2 6.5-3.5" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round"/></svg><span class="brand-name">Mizaj<span class="ar" lang="ar">مزاج</span></span></span>
+        <span class="chip chip-demo">DEMO</span>
+      </div>
+      <div class="popup-wrap">
+        <div id="popup-host">${popupWaiting()}</div>
+        <form class="popup-lookup" id="popup-lookup" autocomplete="off">
+          <label class="sr-only" for="popup-phone">Look up a number</label>
+          <input id="popup-phone" type="search" inputmode="tel" placeholder="Look up a number, e.g. 9000 1006">
+          <button type="submit" class="btn">Look up</button>
+        </form>
+      </div>
+    </div>
+  </div>`);
+}
+
+// ------------------------------------------------------------------ API docs (hosted demo)
+
+function viewApi() {
+  setNav('api');
+  pageTitle('API');
+  const tpl = document.getElementById('mizaj-docs');
+  if (!tpl) {
+    render(view, html`<div class="card"><h2>API documentation</h2><p><a href="/docs">Open the API docs</a></p></div>`);
+    return;
+  }
+  render(view, html`<div class="alert alert-info"><span class="ico">${icon.info}</span><div><b>The API runs when you start the server.</b>
+    <div class="small">This hosted demo runs in your browser, so these endpoints are not live here. Run <code>npm start</code> and they are served at http://localhost:3000.</div></div></div>`);
+  view.appendChild(tpl.content.cloneNode(true));
 }
 
 // ------------------------------------------------------------------ Actions
@@ -563,7 +632,19 @@ document.addEventListener('click', async (e) => {
   if (a === 'simulate-call') simulateCall(el.dataset.phone);
   else if (a === 'open-popup') openPopupWindow();
   else if (a === 'dismiss-call') el.closest('.call-dock > div')?.remove();
-  else if (a === 'open-profile') el.closest('.call-dock > div')?.remove();
+  else if (a === 'open-profile') {
+    e.preventDefault();
+    el.closest('.call-dock > div')?.remove();
+    location.hash = `customer-${el.dataset.id}`;
+  } else if (a === 'reset-demo') {
+    try {
+      await api('/demo/reset', { method: 'POST' });
+      state.profile = null;
+      state.dashboard = null;
+      toast('Demo data reset');
+      route();
+    } catch (err) { toast(err.message); }
+  }
   else if (a === 'quick-correct') {
     const id = el.closest('[data-customer]').dataset.customer;
     try {
@@ -571,6 +652,10 @@ document.addEventListener('click', async (e) => {
       toast(`Recorded: ${MOOD_LABEL[el.dataset.mood]} (agent-reported)`);
       el.closest('.mini-correct').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === el)));
       if (p?.customer.id === id) refreshProfile();
+      const popupHost = document.getElementById('popup-host');
+      if (popupHost && popupHost.contains(el)) {
+        render(popupHost, briefCard(await api(`/customers/${encodeURIComponent(id)}/brief`), { call: state.popupCall, workplace: prefs.get().workplace }));
+      }
     } catch (err) { toast(err.message); }
   } else if (a === 'confirm-mood' && p) {
     try {
@@ -624,6 +709,16 @@ document.addEventListener('click', async (e) => {
 });
 
 document.addEventListener('submit', async (e) => {
+  if (e.target.id === 'popup-lookup') {
+    e.preventDefault();
+    const number = document.getElementById('popup-phone').value.trim();
+    if (!number) return;
+    try {
+      state.popupCall = null;
+      render(document.getElementById('popup-host'), briefCard(await api(`/lookup?phone=${encodeURIComponent(number)}`), { workplace: prefs.get().workplace }));
+    } catch (err) { toast(err.message); }
+    return;
+  }
   if (e.target.id !== 'fu-form' || !state.profile) return;
   e.preventDefault();
   const title = document.getElementById('fu-title').value.trim();
@@ -662,8 +757,11 @@ function initSettings() {
   });
 }
 
-initSettings();
-wireSearch(quick);
-subscribeCalls(showCall);
-window.addEventListener('hashchange', route);
-route();
+export function start() {
+  if (runtime.mode === 'hosted') document.querySelectorAll('[data-action="open-popup"]').forEach((b) => { b.hidden = true; });
+  initSettings();
+  wireSearch(quick);
+  subscribeCalls(showCall);
+  window.addEventListener('hashchange', route);
+  route();
+}

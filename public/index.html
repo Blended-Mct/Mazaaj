@@ -7,12 +7,12 @@
   <meta name="description" content="Mizaj (مزاج) — Customer Mood Intelligence. Know the mood before you say hello.">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/mizaj.css">
-  <script type="module" src="/js/app.js"></script>
+  <script type="module" src="/js/main.js"></script>
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="brand" href="#/" aria-label="Mizaj home">
+      <a class="brand" href="#" aria-label="Mizaj home">
         <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--accent)"/><circle cx="11.5" cy="13" r="1.9" fill="var(--accent-ink)"/><circle cx="20.5" cy="13" r="1.9" fill="var(--accent-ink)"/><path d="M9.5 19.5c1.7 2.3 4 3.5 6.5 3.5s4.8-1.2 6.5-3.5" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round"/></svg>
         <span>
           <span class="brand-name">Mizaj<span class="ar" lang="ar">مزاج</span></span>
@@ -20,9 +20,10 @@
         </span>
       </a>
       <nav class="nav" aria-label="Main">
-        <a href="#/" data-nav="search">Customers</a>
-        <a href="#/dashboard" data-nav="dashboard">Dashboard</a>
-        <a href="#/integrations" data-nav="integrations">Integrations</a>
+        <a href="#" data-nav="search">Customers</a>
+        <a href="#popup" data-nav="popup">Call popup</a>
+        <a href="#dashboard" data-nav="dashboard">Dashboard</a>
+        <a href="#integrations" data-nav="integrations">Integrations</a>
         <a href="/docs" target="_blank" rel="noopener">API</a>
       </nav>
       <div class="topbar-tools">
@@ -54,7 +55,7 @@
       </div>
     </div>
     <div class="demo-banner" role="note">
-      <div><strong>DEMO</strong><span>Fictional customers · all customer data sources simulated.</span><a href="#/integrations">What’s live?</a></div>
+      <div><strong>DEMO</strong><span>Fictional customers · all customer data sources simulated.</span><a href="#integrations">What’s live?</a></div>
     </div>
   </header>
 
